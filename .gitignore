@@ -1,0 +1,18 @@
+# Dependency directories
+/vendor/
+/node_modules/
+
+# Lockfile (library package)
+/composer.lock
+
+# Environment and local overrides
+.env
+.env.*
+
+# Tooling and OS noise
+.DS_Store
+.idea/
+.vscode/
+*.log
+/.phpunit.result.cache
+/.php_cs.cache
