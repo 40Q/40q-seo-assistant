@@ -1,0 +1,22 @@
+{
+    "name": "40q/40q-seo-assistant",
+    "description": "Editor-side SEO suggestions for The SEO Framework powered by Acorn.",
+    "type": "acorn-package",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.3",
+        "roots/acorn": "^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "FortyQ\\SeoAssistant\\": "src/"
+        }
+    },
+    "extra": {
+        "acorn": {
+            "providers": [
+                "FortyQ\\SeoAssistant\\SeoAssistantServiceProvider"
+            ]
+        }
+    }
+}
