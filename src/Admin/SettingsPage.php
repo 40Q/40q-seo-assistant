@@ -68,17 +68,9 @@ class SettingsPage
             '40q-seo-assistant/main',
             __('SEO Assistant Settings', 'radicle'),
             function () {
-                echo '<p>' . esc_html__('Configure which AI model and SEO plugin the assistant should target.', 'radicle') . '</p>';
+                echo '<p>' . esc_html__('Configure SEO Assistant behavior. AI provider and credentials are managed in Autonomy AI > General Settings.', 'radicle') . '</p>';
             },
             '40q-seo-assistant'
-        );
-
-        add_settings_field(
-            '40q-seo-assistant/ai-model',
-            __('AI model', 'radicle'),
-            [$this, 'renderAiModelField'],
-            '40q-seo-assistant',
-            '40q-seo-assistant/main'
         );
 
         add_settings_field(
@@ -90,30 +82,11 @@ class SettingsPage
         );
 
         add_settings_field(
-            '40q-seo-assistant/openai-key',
-            __('OpenAI API key', 'radicle'),
-            [$this, 'renderOpenAiKeyField'],
-            '40q-seo-assistant',
-            '40q-seo-assistant/main',
-            ['class' => '40q-seo-assistant-openai-row']
-        );
-
-        add_settings_field(
-            '40q-seo-assistant/openai-model',
-            __('OpenAI model', 'radicle'),
-            [$this, 'renderOpenAiModelField'],
-            '40q-seo-assistant',
-            '40q-seo-assistant/main',
-            ['class' => '40q-seo-assistant-openai-row']
-        );
-
-        add_settings_field(
             '40q-seo-assistant/openai-prompt',
             __('OpenAI prompt', 'radicle'),
             [$this, 'renderOpenAiPromptField'],
             '40q-seo-assistant',
-            '40q-seo-assistant/main',
-            ['class' => '40q-seo-assistant-openai-row']
+            '40q-seo-assistant/main'
         );
 
         add_settings_field(
@@ -121,8 +94,7 @@ class SettingsPage
             __('OpenAI user prompt', 'radicle'),
             [$this, 'renderOpenAiUserPromptField'],
             '40q-seo-assistant',
-            '40q-seo-assistant/main',
-            ['class' => '40q-seo-assistant-openai-row']
+            '40q-seo-assistant/main'
         );
     }
 
@@ -152,49 +124,6 @@ class SettingsPage
                 ?>
             </form>
         </div>
-        <script>
-            (function () {
-                const select = document.getElementById('40q-seo-assistant-ai-model');
-                const openAiRows = document.querySelectorAll('.40q-seo-assistant-openai-row');
-
-                function toggleOpenAi() {
-                    const show = select && select.value === 'openai';
-                    openAiRows.forEach((row) => {
-                        row.style.display = show ? '' : 'none';
-                    });
-                }
-
-                if (select) {
-                    select.addEventListener('change', toggleOpenAi);
-                    toggleOpenAi();
-                }
-            })();
-        </script>
-        <?php
-    }
-
-    public function renderAiModelField(): void
-    {
-        $settings = self::getSettings();
-        $value = $settings['ai_model'] ?? 'heuristic';
-        ?>
-        <select name="<?php echo esc_attr(self::OPTION_NAME); ?>[ai_model]" id="40q-seo-assistant-ai-model">
-            <option value="heuristic" <?php selected($value, 'heuristic'); ?>>
-                <?php esc_html_e('Heuristic (built-in)', 'radicle'); ?>
-            </option>
-            <option value="openai" <?php selected($value, 'openai'); ?>>
-                <?php esc_html_e('OpenAI', 'radicle'); ?>
-            </option>
-            <option value="anthropic" <?php selected($value, 'anthropic'); ?>>
-                <?php esc_html_e('Anthropic', 'radicle'); ?>
-            </option>
-            <option value="custom" <?php selected($value, 'custom'); ?>>
-                <?php esc_html_e('Custom (hook via filters)', 'radicle'); ?>
-            </option>
-        </select>
-        <p class="description">
-            <?php esc_html_e('Selection is stored for downstream generators; built-in logic uses the heuristic option.', 'radicle'); ?>
-        </p>
         <?php
     }
 
@@ -221,69 +150,19 @@ class SettingsPage
     {
         $defaults = self::defaults();
 
-        $aiModel = $value['ai_model'] ?? $defaults['ai_model'];
         $seoPlugin = $value['seo_plugin'] ?? $defaults['seo_plugin'];
-        $openAiKey = $value['openai_api_key'] ?? $defaults['openai_api_key'];
-        $openAiModel = $value['openai_model'] ?? $defaults['openai_model'];
         $openAiPrompt = $value['openai_prompt'] ?? $defaults['openai_prompt'];
         $openAiUserPrompt = $value['openai_user_prompt'] ?? $defaults['openai_user_prompt'];
-
-        $aiModel = in_array($aiModel, ['heuristic', 'openai', 'anthropic', 'custom'], true)
-            ? $aiModel
-            : $defaults['ai_model'];
 
         $seoPlugin = in_array($seoPlugin, ['tsf', 'yoast'], true)
             ? $seoPlugin
             : $defaults['seo_plugin'];
 
         return [
-            'ai_model' => $aiModel,
             'seo_plugin' => $seoPlugin,
-            'openai_api_key' => trim((string) $openAiKey),
-            'openai_model' => trim((string) $openAiModel) ?: $defaults['openai_model'],
             'openai_prompt' => trim((string) $openAiPrompt) ?: $defaults['openai_prompt'],
             'openai_user_prompt' => trim((string) $openAiUserPrompt) ?: $defaults['openai_user_prompt'],
         ];
-    }
-
-    public function renderOpenAiKeyField(): void
-    {
-        $settings = self::getSettings();
-        $value = $settings['openai_api_key'] ?? '';
-        ?>
-        <input type="password" style="width: 320px" name="<?php echo esc_attr(self::OPTION_NAME); ?>[openai_api_key]" value="<?php echo esc_attr($value); ?>" autocomplete="off" />
-        <p class="description">
-            <?php esc_html_e('Stored in wp_options. Required when AI model is set to OpenAI.', 'radicle'); ?>
-        </p>
-        <?php
-    }
-
-    public function renderOpenAiModelField(): void
-    {
-        $settings = self::getSettings();
-        $value = $settings['openai_model'] ?? 'gpt-4o-mini';
-        ?>
-        <select name="<?php echo esc_attr(self::OPTION_NAME); ?>[openai_model]" style="width: 240px">
-            <?php
-            $models = [
-                'gpt-4o-mini' => 'gpt-4o-mini (fast, cost-effective)',
-                'gpt-4o' => 'gpt-4o (general purpose)',
-                'gpt-4.1' => 'gpt-4.1 (latest general)',
-                'gpt-4.1-mini' => 'gpt-4.1-mini (lightweight)',
-                'o3-mini' => 'o3-mini (reasoning, lightweight)',
-            ];
-
-            foreach ($models as $model => $label) :
-                ?>
-                <option value="<?php echo esc_attr($model); ?>" <?php selected($value, $model); ?>>
-                    <?php echo esc_html($label); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-        <p class="description">
-            <?php esc_html_e('Used when AI model is set to OpenAI.', 'radicle'); ?>
-        </p>
-        <?php
     }
 
     public function renderOpenAiPromptField(): void
@@ -293,7 +172,7 @@ class SettingsPage
         ?>
         <textarea name="<?php echo esc_attr(self::OPTION_NAME); ?>[openai_prompt]" rows="24" cols="60" style="width: 100%; max-width: 1100px; font-family: monospace;"><?php echo esc_textarea($value); ?></textarea>
         <p class="description">
-            <?php esc_html_e('Customize the system prompt sent to OpenAI. Keep JSON keys: meta_title, meta_description, open_graph_description, twitter_description.', 'radicle'); ?>
+            <?php esc_html_e('Customize the system prompt sent to OpenAI. Keep JSON keys: meta_title, meta_description, open_graph_description, twitter_description. OpenAI credentials live in General Settings.', 'radicle'); ?>
         </p>
         <?php
     }
