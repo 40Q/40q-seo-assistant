@@ -35,7 +35,6 @@ class SeoAssistantServiceProvider extends ServiceProvider
         $settingsPage = $this->app->make(SettingsPage::class);
         $settingsPage->boot(false);
         add_action('admin_menu', [$this, 'registerHubMenu'], 20);
-        add_action('admin_menu', [$this, 'removeLegacyMenu'], 99);
 
         add_action('rest_api_init', [$this, 'registerRoutes']);
         add_action('enqueue_block_editor_assets', [$this, 'enqueueEditorAssets']);
@@ -91,7 +90,7 @@ class SeoAssistantServiceProvider extends ServiceProvider
         wp_enqueue_script($scriptHandle);
     }
 
-    protected function registerHubMenu(): void
+    public function registerHubMenu(): void
     {
         $capability = 'manage_options';
         $title = __('SEO Assistant', 'radicle');
@@ -104,11 +103,6 @@ class SeoAssistantServiceProvider extends ServiceProvider
             '40q-autonomy-ai-seo-assistant',
             [$this->app->make(SettingsPage::class), 'renderPage']
         );
-    }
-
-    protected function removeLegacyMenu(): void
-    {
-        remove_submenu_page('options-general.php', '40q-seo-assistant');
     }
 
     protected function isHubAvailable(): bool

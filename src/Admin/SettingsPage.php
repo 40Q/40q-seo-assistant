@@ -142,6 +142,7 @@ class SettingsPage
         $settings = self::getSettings();
         ?>
         <div class="wrap">
+            <?php settings_errors(); ?>
             <h1><?php esc_html_e('SEO Assistant', 'radicle'); ?></h1>
             <form method="post" action="options.php">
                 <?php
