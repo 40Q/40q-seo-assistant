@@ -12,14 +12,30 @@ class SeoAssistantServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->mergeConfigFrom(__DIR__ . '/../config/seo-assistant.php', 'seo-assistant');
+
         $this->app->singleton(SuggestionBuilder::class, fn ($app) => new SuggestionBuilder($app->make(OpenAiClient::class)));
         $this->app->singleton(SettingsPage::class, fn () => new SettingsPage());
         $this->app->singleton(OpenAiClient::class, fn () => new OpenAiClient());
+
+        $this->publishes([
+            __DIR__ . '/../config/seo-assistant.php' => $this->app->configPath('seo-assistant.php'),
+        ], 'seo-assistant-config');
     }
 
     public function boot(): void
     {
-        $this->app->make(SettingsPage::class)->boot();
+        if (!$this->isHubAvailable()) {
+            if (is_admin()) {
+                add_action('admin_notices', [$this, 'missingHubNotice']);
+            }
+            return;
+        }
+
+        $settingsPage = $this->app->make(SettingsPage::class);
+        $settingsPage->boot(false);
+        add_action('admin_menu', [$this, 'registerHubMenu'], 20);
+        add_action('admin_menu', [$this, 'removeLegacyMenu'], 99);
 
         add_action('rest_api_init', [$this, 'registerRoutes']);
         add_action('enqueue_block_editor_assets', [$this, 'enqueueEditorAssets']);
@@ -73,5 +89,37 @@ class SeoAssistantServiceProvider extends ServiceProvider
         ]);
 
         wp_enqueue_script($scriptHandle);
+    }
+
+    protected function registerHubMenu(): void
+    {
+        $capability = 'manage_options';
+        $title = __('SEO Assistant', 'radicle');
+
+        add_submenu_page(
+            '40q-autonomy-ai',
+            $title,
+            $title,
+            $capability,
+            '40q-autonomy-ai-seo-assistant',
+            [$this->app->make(SettingsPage::class), 'renderPage']
+        );
+    }
+
+    protected function removeLegacyMenu(): void
+    {
+        remove_submenu_page('options-general.php', '40q-seo-assistant');
+    }
+
+    protected function isHubAvailable(): bool
+    {
+        return class_exists('FortyQ\\AutonomyAiHub\\AutonomyAiServiceProvider', false);
+    }
+
+    public function missingHubNotice(): void
+    {
+        echo '<div class="notice notice-error"><p>';
+        esc_html_e('SEO Assistant requires the 40Q Autonomy AI hub to be installed and active.', 'radicle');
+        echo '</p></div>';
     }
 }

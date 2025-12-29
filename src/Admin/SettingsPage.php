@@ -10,21 +10,24 @@ class SettingsPage
     public const OPTION_NAME = '40q_seo_assistant_settings';
     private const LEGACY_OPTION_NAME = 'acorn_seo_assistant_settings';
 
-    public function boot(): void
+    public function boot(bool $registerOptionsMenu = true): void
     {
         add_action('admin_init', [$this, 'register']);
-        add_action('admin_menu', [$this, 'addMenu']);
+        if ($registerOptionsMenu) {
+            add_action('admin_menu', [$this, 'addMenu']);
+        }
     }
 
     public static function defaults(): array
     {
+        $config = function_exists('config') ? (array) config('seo-assistant', []) : [];
         return [
-            'ai_model' => 'heuristic',
-            'seo_plugin' => 'tsf',
-            'openai_api_key' => '',
-            'openai_model' => 'gpt-4o-mini',
-            'openai_prompt' => OpenAiClient::defaultPrompt(),
-            'openai_user_prompt' => OpenAiClient::defaultUserPrompt(),
+            'ai_model' => $config['ai_model'] ?? 'heuristic',
+            'seo_plugin' => $config['seo_plugin'] ?? 'tsf',
+            'openai_api_key' => $config['openai']['api_key'] ?? '',
+            'openai_model' => $config['openai']['model'] ?? 'gpt-4o-mini',
+            'openai_prompt' => $config['openai']['prompt'] ?? OpenAiClient::defaultPrompt(),
+            'openai_user_prompt' => $config['openai']['user_prompt'] ?? OpenAiClient::defaultUserPrompt(),
         ];
     }
 
@@ -37,10 +40,16 @@ class SettingsPage
             $stored = (array) get_option(self::LEGACY_OPTION_NAME, []);
         }
 
-        return wp_parse_args(
-            $stored,
-            self::defaults()
-        );
+        $defaults = self::defaults();
+
+        return [
+            'ai_model' => self::envDefined('SEO_ASSISTANT_MODEL') ? $defaults['ai_model'] : ($stored['ai_model'] ?? $defaults['ai_model']),
+            'seo_plugin' => self::envDefined('SEO_ASSISTANT_PLUGIN') ? $defaults['seo_plugin'] : ($stored['seo_plugin'] ?? $defaults['seo_plugin']),
+            'openai_api_key' => self::envDefined('SEO_ASSISTANT_OPENAI_KEY') ? $defaults['openai_api_key'] : ($stored['openai_api_key'] ?? $defaults['openai_api_key']),
+            'openai_model' => self::envDefined('SEO_ASSISTANT_OPENAI_MODEL') ? $defaults['openai_model'] : ($stored['openai_model'] ?? $defaults['openai_model']),
+            'openai_prompt' => $stored['openai_prompt'] ?? $defaults['openai_prompt'],
+            'openai_user_prompt' => $stored['openai_user_prompt'] ?? $defaults['openai_user_prompt'],
+        ];
     }
 
     public function register(): void
@@ -298,5 +307,10 @@ class SettingsPage
             <?php esc_html_e('Customize the user message sent to OpenAI. Available placeholders: {{title}}, {{raw_content}}. Keep JSON keys in the instructions.', 'radicle'); ?>
         </p>
         <?php
+    }
+
+    protected static function envDefined(string $key): bool
+    {
+        return getenv($key) !== false;
     }
 }
