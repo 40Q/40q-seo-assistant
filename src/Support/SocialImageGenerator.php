@@ -197,7 +197,16 @@ class SocialImageGenerator
 
         $timeout = $envTimeout ?: $configTimeout;
 
-        return $timeout > 0 ? $timeout : 15;
+        // Clamp to a reasonable range to avoid hanging PHP workers.
+        if ($timeout < 5) {
+            $timeout = 30;
+        }
+
+        if ($timeout > 120) {
+            $timeout = 120;
+        }
+
+        return $timeout;
     }
 
     private function log(string $message): void
