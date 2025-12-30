@@ -5,6 +5,7 @@ namespace FortyQ\SeoAssistant;
 use FortyQ\SeoAssistant\Admin\SettingsPage;
 use FortyQ\SeoAssistant\Http\Controllers\SeoSuggestionController;
 use FortyQ\SeoAssistant\Support\OpenAiClient;
+use FortyQ\SeoAssistant\Support\SocialImageGenerator;
 use FortyQ\SeoAssistant\Support\SuggestionBuilder;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,6 +18,7 @@ class SeoAssistantServiceProvider extends ServiceProvider
         $this->app->singleton(SuggestionBuilder::class, fn ($app) => new SuggestionBuilder($app->make(OpenAiClient::class)));
         $this->app->singleton(SettingsPage::class, fn () => new SettingsPage());
         $this->app->singleton(OpenAiClient::class, fn () => new OpenAiClient());
+        $this->app->singleton(SocialImageGenerator::class, fn () => new SocialImageGenerator());
 
         $this->publishes([
             __DIR__ . '/../config/seo-assistant.php' => $this->app->configPath('seo-assistant.php'),

@@ -3,11 +3,12 @@
   "description": "Editor-side SEO suggestions for The SEO Framework powered by Acorn.",
   "type": "acorn-package",
   "license": "MIT",
-  "version": "0.2.1",
+  "version": "0.2.5",
   "require": {
     "php": ">=8.3",
     "40q/autonomy-ai-hub": "*",
-    "roots/acorn": "^5.0"
+    "roots/acorn": "^5.0",
+    "spatie/browsershot": "^5.2"
   },
   "autoload": {
     "psr-4": {

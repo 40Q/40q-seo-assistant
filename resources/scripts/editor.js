@@ -162,10 +162,12 @@
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isApplying, setIsApplying] = useState(false);
+    const [isGeneratingSocial, setIsGeneratingSocial] = useState(false);
     const [hasSuggestions, setHasSuggestions] = useState(false);
     const [hasFetched, setHasFetched] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
+    const [socialImageUrl, setSocialImageUrl] = useState('');
     const [suggestions, setSuggestions] = useState(initialSuggestion);
     const [currentMeta, setCurrentMeta] = useState({});
     const [applyFlags, setApplyFlags] = useState(buildDefaultApplyFlags());
@@ -285,6 +287,33 @@
       }
     };
 
+    const generateSocialImage = async () => {
+      setError('');
+      setNotice('');
+      setIsGeneratingSocial(true);
+
+      try {
+        const response = await apiFetch({
+          path: `${restNamespace}/social-image`,
+          method: 'POST',
+          data: {
+            post_id: postId,
+          },
+        });
+
+        if (response?.url) {
+          setSocialImageUrl(response.url);
+          updateTsfSocialImage(response.url, response.attachment_id);
+        }
+
+        setNotice(__('Social image generated and applied.', 'radicle'));
+      } catch (err) {
+        setError(err?.message || __('Unable to generate the social image.', 'radicle'));
+      } finally {
+        setIsGeneratingSocial(false);
+      }
+    };
+
     useEffect(() => {
       if (!postId) {
         setError(__('Post ID missing. Save the draft before requesting suggestions.', 'radicle'));
@@ -314,6 +343,23 @@
             Notice,
             { status: 'warning', isDismissible: false, style: { marginTop: '8px' } },
             __('The SEO Framework is required for the assistant to run. Activate it to enable suggestions.', 'radicle')
+          )
+        : null,
+      el(
+        Button,
+        {
+          variant: 'secondary',
+          disabled: isGeneratingSocial || !postId || !hasTSF,
+          onClick: generateSocialImage,
+          style: { marginTop: '8px' },
+        },
+        isGeneratingSocial ? el(Spinner, null) : __('Generate social image URL', 'radicle')
+      ),
+      socialImageUrl
+        ? el(
+            'a',
+            { href: socialImageUrl, target: '_blank', rel: 'noreferrer', style: { marginTop: '4px', fontSize: '12px' } },
+            __('View latest generated image', 'radicle')
           )
         : null,
       el(
@@ -402,6 +448,23 @@
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
     });
+  }
+
+  function updateTsfSocialImage(url, attachmentId) {
+    const urlInput = document.querySelector('#autodescription_socialimage-url');
+    const idInput = document.querySelector('#autodescription_socialimage-id');
+
+    if (urlInput && typeof url === 'string') {
+      urlInput.value = url;
+      urlInput.dispatchEvent(new Event('input', { bubbles: true }));
+      urlInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (idInput && attachmentId) {
+      idInput.value = attachmentId;
+      idInput.dispatchEvent(new Event('input', { bubbles: true }));
+      idInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
   }
 
   function buildDefaultApplyFlags(suggestions = initialSuggestion) {

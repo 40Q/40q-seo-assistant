@@ -3,6 +3,7 @@
 namespace FortyQ\SeoAssistant\Http\Controllers;
 
 use FortyQ\SeoAssistant\Admin\SettingsPage;
+use FortyQ\SeoAssistant\Support\SocialImageGenerator;
 use FortyQ\SeoAssistant\Support\SuggestionBuilder;
 use WP_Error;
 use WP_REST_Request;
@@ -12,7 +13,10 @@ use function is_wp_error;
 
 class SeoSuggestionController
 {
-    public function __construct(protected SuggestionBuilder $builder)
+    public function __construct(
+        protected SuggestionBuilder $builder,
+        protected SocialImageGenerator $socialImageGenerator
+    )
     {
     }
 
@@ -60,6 +64,22 @@ class SeoSuggestionController
                 'apply' => ['type' => 'object'],
             ],
         ]);
+
+        register_rest_route('40q-seo-assistant/v1', 'social-image', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'permission_callback' => $this->permissionCallback(...),
+            'callback' => [$this, 'generateSocialImage'],
+            'args' => [
+                'post_id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+                'url' => [
+                    'type' => 'string',
+                    'required' => false,
+                ],
+            ],
+        ]);
     }
 
     public function suggest(WP_REST_Request $request): array|WP_Error
@@ -91,6 +111,33 @@ class SeoSuggestionController
             'suggestions' => $suggestions,
             'current_meta' => $this->getCurrentMeta($postId),
             'settings' => $settings,
+        ];
+    }
+
+    public function generateSocialImage(WP_REST_Request $request): array|WP_Error
+    {
+        $postId = (int) $request->get_param('post_id');
+
+        if ($postId <= 0) {
+            return new WP_Error('invalid_post_id', __('Post ID is required.', 'radicle'), ['status' => 400]);
+        }
+
+        if (!function_exists('the_seo_framework')) {
+            return new WP_Error('tsf_inactive', __('The SEO Framework must be active to generate social images.', 'radicle'), ['status' => 400]);
+        }
+
+        $targetUrl = $request->get_param('url');
+
+        $result = $this->socialImageGenerator->generate($postId, $targetUrl);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return [
+            'success' => true,
+            'attachment_id' => $result['attachment_id'],
+            'url' => $result['url'],
         ];
     }
 
