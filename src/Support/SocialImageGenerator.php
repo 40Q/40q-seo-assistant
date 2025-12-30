@@ -51,6 +51,7 @@ class SocialImageGenerator
 
         $requestUrl = add_query_arg(['url' => $url], $service);
         $timeout = $this->timeout();
+        $this->log(sprintf('Requesting social image: target=%s service=%s timeout=%ss', $url, $requestUrl, $timeout));
         $response = wp_remote_get($requestUrl, [
             'timeout' => $timeout,
             'redirection' => 3,
@@ -60,6 +61,7 @@ class SocialImageGenerator
         ]);
 
         if (is_wp_error($response)) {
+            $this->log(sprintf('Social image request failed: %s', $response->get_error_message()));
             return new WP_Error(
                 'seo_social_image_capture_failed',
                 __('Unable to capture the social image.', 'radicle'),
@@ -69,6 +71,8 @@ class SocialImageGenerator
 
         $code = wp_remote_retrieve_response_code($response);
         if ($code !== 200) {
+            $bodyPreview = substr((string) wp_remote_retrieve_body($response), 0, 400);
+            $this->log(sprintf('Social image HTTP %d from service. Body preview: %s', $code, $bodyPreview));
             return new WP_Error(
                 'seo_social_image_capture_failed',
                 __('Unable to capture the social image.', 'radicle'),
@@ -85,6 +89,7 @@ class SocialImageGenerator
 
         $body = wp_remote_retrieve_body($response);
         if (!$body) {
+            $this->log('Social image response body empty.');
             return new WP_Error(
                 'seo_social_image_missing_file',
                 __('Screenshot was not created.', 'radicle'),
@@ -142,6 +147,7 @@ class SocialImageGenerator
         $uploadedUrl = wp_get_attachment_url($attachmentId);
 
         if (!$uploadedUrl) {
+            $this->log('Social image uploaded but URL missing.');
             @unlink($tmpPath);
 
             return new WP_Error(
@@ -192,5 +198,12 @@ class SocialImageGenerator
         $timeout = $envTimeout ?: $configTimeout;
 
         return $timeout > 0 ? $timeout : 15;
+    }
+
+    private function log(string $message): void
+    {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('[seo-assistant social image] ' . $message);
+        }
     }
 }
