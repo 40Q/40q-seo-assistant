@@ -11,4 +11,7 @@ return [
         'prompt' => OpenAiClient::defaultPrompt(),
         'user_prompt' => OpenAiClient::defaultUserPrompt(),
     ],
+    'social_image' => [
+        'service_url' => env('SEO_ASSISTANT_SOCIAL_SERVICE_URL', 'https://og-gen-pjqz.onrender.com/screenshot'),
+    ],
 ];
