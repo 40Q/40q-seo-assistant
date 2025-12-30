@@ -26,7 +26,7 @@ class SocialImageGenerator
      */
     public function generate(int $postId, ?string $targetUrl = null): array|WP_Error
     {
-        $url = $targetUrl ?: get_permalink($postId);
+        $url = $this->targetUrl($postId, $targetUrl);
 
         if (!$postId || !$url) {
             return new WP_Error(
@@ -168,6 +168,20 @@ class SocialImageGenerator
         $url = $envUrl ?: $configUrl ?: self::DEFAULT_SERVICE;
 
         return rtrim((string) $url, '?');
+    }
+
+    private function targetUrl(int $postId, ?string $override = null): string
+    {
+        $configOverride = config('seo-assistant.social_image.target_override') ?? '';
+        $envOverride = getenv('SEO_ASSISTANT_SOCIAL_TARGET') ?: '';
+
+        $explicit = $override ?: $envOverride ?: $configOverride;
+
+        if (!empty($explicit)) {
+            return trim((string) $explicit);
+        }
+
+        return get_permalink($postId) ?: '';
     }
 
     private function timeout(): int
