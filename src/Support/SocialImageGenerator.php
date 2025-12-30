@@ -18,6 +18,7 @@ use function wp_remote_retrieve_header;
 use function wp_remote_retrieve_response_code;
 use function wp_tempnam;
 use function sanitize_title;
+use function random_int;
 
 class SocialImageGenerator
 {
@@ -249,8 +250,9 @@ class SocialImageGenerator
     private function buildFilename(int $postId, string $extension): string
     {
         $slug = sanitize_title((string) get_post_field('post_name', $postId));
-        $slug = $slug !== '' ? $slug : 'post-' . $postId;
+        $slug = $slug !== '' ? $slug : 'post';
+        $random = random_int(1000, 99999);
 
-        return sprintf('social-image-%s-%d.%s', $slug, $postId, $extension);
+        return sprintf('social-image-%s-%s.%s', $slug, $random, $extension);
     }
 }
