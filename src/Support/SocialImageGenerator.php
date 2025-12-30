@@ -8,6 +8,7 @@ use function add_query_arg;
 use function esc_url_raw;
 use function function_exists;
 use function get_permalink;
+use function get_post_field;
 use function is_wp_error;
 use function trailingslashit;
 use function wp_get_attachment_url;
@@ -16,6 +17,7 @@ use function wp_remote_retrieve_body;
 use function wp_remote_retrieve_header;
 use function wp_remote_retrieve_response_code;
 use function wp_tempnam;
+use function sanitize_title;
 
 class SocialImageGenerator
 {
@@ -129,7 +131,7 @@ class SocialImageGenerator
         }
 
         $fileArray = [
-            'name' => 'social-image-' . $postId . '.' . $extension,
+            'name' => $this->buildFilename($postId, $extension),
             'type' => $contentType ?: 'image/jpeg',
             'tmp_name' => $tmpPath,
             'error' => 0,
@@ -242,5 +244,13 @@ class SocialImageGenerator
         }
 
         return sprintf('%s://%s%s%s%s%s', $scheme, $host, $port, $path, $query, $fragment);
+    }
+
+    private function buildFilename(int $postId, string $extension): string
+    {
+        $slug = sanitize_title((string) get_post_field('post_name', $postId));
+        $slug = $slug !== '' ? $slug : 'post-' . $postId;
+
+        return sprintf('social-image-%s-%d.%s', $slug, $postId, $extension);
     }
 }
