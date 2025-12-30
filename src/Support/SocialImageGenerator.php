@@ -181,13 +181,18 @@ class SocialImageGenerator
         $configOverride = config('seo-assistant.social_image.target_override') ?? '';
         $envOverride = getenv('SEO_ASSISTANT_SOCIAL_TARGET') ?: '';
 
-        $explicit = $override ?: $envOverride ?: $configOverride;
+        $originOverride = trim((string) ($envOverride ?: $configOverride));
+        $base = $override ?: get_permalink($postId) ?: '';
 
-        if (!empty($explicit)) {
-            return trim((string) $explicit);
+        if ($base === '') {
+            return '';
         }
 
-        return get_permalink($postId) ?: '';
+        if ($originOverride !== '') {
+            return $this->swapOrigin($originOverride, $base);
+        }
+
+        return $base;
     }
 
     private function timeout(): int
@@ -214,5 +219,28 @@ class SocialImageGenerator
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('[seo-assistant social image] ' . $message);
         }
+    }
+
+    private function swapOrigin(string $origin, string $original): string
+    {
+        $originUrl = parse_url($origin);
+        $originalUrl = parse_url($original);
+
+        if (!$originUrl || !$originalUrl) {
+            return $original;
+        }
+
+        $scheme = $originUrl['scheme'] ?? 'https';
+        $host = $originUrl['host'] ?? '';
+        $port = isset($originUrl['port']) ? ':' . $originUrl['port'] : '';
+        $path = $originalUrl['path'] ?? '/';
+        $query = isset($originalUrl['query']) ? '?' . $originalUrl['query'] : '';
+        $fragment = isset($originalUrl['fragment']) ? '#' . $originalUrl['fragment'] : '';
+
+        if ($host === '') {
+            return $original;
+        }
+
+        return sprintf('%s://%s%s%s%s%s', $scheme, $host, $port, $path, $query, $fragment);
     }
 }
