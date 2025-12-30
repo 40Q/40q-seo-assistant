@@ -2,48 +2,34 @@
 
 namespace FortyQ\SeoAssistant\Support;
 
-use Spatie\Browsershot\Browsershot;
 use WP_Error;
 use function absint;
+use function add_query_arg;
 use function esc_url_raw;
 use function function_exists;
 use function get_permalink;
+use function get_post_field;
 use function is_wp_error;
-use function is_dir;
-use function sanitize_text_field;
-use function unlink;
+use function trailingslashit;
 use function wp_get_attachment_url;
+use function wp_remote_get;
+use function wp_remote_retrieve_body;
+use function wp_remote_retrieve_header;
+use function wp_remote_retrieve_response_code;
 use function wp_tempnam;
+use function sanitize_title;
+use function random_int;
 
 class SocialImageGenerator
 {
-    private const WIDTH = 1200;
-    private const HEIGHT = 628;
-    private const QUALITY = 70;
+    private const DEFAULT_SERVICE = 'https://og-gen-pjqz.onrender.com/screenshot';
 
     /**
-    * Generate a social image for a post, upload it to the Media Library, and persist TSF meta.
-    */
+     * Generate a social image using an external screenshot service, upload to Media Library, and persist TSF meta.
+     */
     public function generate(int $postId, ?string $targetUrl = null): array|WP_Error
     {
-        if (!class_exists(Browsershot::class)) {
-            return new WP_Error(
-                'seo_social_image_missing_dep',
-                __('Unable to generate image: Browsershot is not installed.', 'radicle'),
-                ['status' => 500]
-            );
-        }
-
-        // Browsershot's launcher requires the Puppeteer JS package to be present.
-        if (!$this->hasPuppeteerModule()) {
-            return new WP_Error(
-                'seo_social_image_puppeteer_missing',
-                __('Puppeteer is not installed on this server. Install it (e.g., npm install puppeteer) or configure BROWSERSHOT_CHROME_PATH.', 'radicle'),
-                ['status' => 500]
-            );
-        }
-
-        $url = $targetUrl ?: get_permalink($postId);
+        $url = $this->targetUrl($postId, $targetUrl);
 
         if (!$postId || !$url) {
             return new WP_Error(
@@ -53,9 +39,69 @@ class SocialImageGenerator
             );
         }
 
+        $service = $this->serviceUrl();
+        if (!$service) {
+            return new WP_Error(
+                'seo_social_image_service_missing',
+                __('Screenshot service URL is not configured.', 'radicle'),
+                ['status' => 500]
+            );
+        }
+
         if (!function_exists('wp_tempnam')) {
             require_once ABSPATH . 'wp-admin/includes/file.php';
         }
+
+        $requestUrl = add_query_arg(['url' => $url], $service);
+        $timeout = $this->timeout();
+        $this->log(sprintf('Requesting social image: target=%s service=%s timeout=%ss', $url, $requestUrl, $timeout));
+        $response = wp_remote_get($requestUrl, [
+            'timeout' => $timeout,
+            'redirection' => 3,
+            'headers' => [
+                'Accept' => 'image/jpeg,image/png;q=0.9,*/*;q=0.8',
+            ],
+        ]);
+
+        if (is_wp_error($response)) {
+            $this->log(sprintf('Social image request failed: %s', $response->get_error_message()));
+            return new WP_Error(
+                'seo_social_image_capture_failed',
+                __('Unable to capture the social image.', 'radicle'),
+                ['status' => 500, 'detail' => $response->get_error_message()]
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code !== 200) {
+            $bodyPreview = substr((string) wp_remote_retrieve_body($response), 0, 400);
+            $this->log(sprintf('Social image HTTP %d from service. Body preview: %s', $code, $bodyPreview));
+            return new WP_Error(
+                'seo_social_image_capture_failed',
+                __('Unable to capture the social image.', 'radicle'),
+                [
+                    'status' => 500,
+                    'detail' => sprintf(
+                        'HTTP %d from screenshot service%s',
+                        $code,
+                        $timeout ? sprintf(' (timeout %ss)', $timeout) : ''
+                    ),
+                ]
+            );
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        if (!$body) {
+            $this->log('Social image response body empty.');
+            return new WP_Error(
+                'seo_social_image_missing_file',
+                __('Screenshot was not created.', 'radicle'),
+                ['status' => 500]
+            );
+        }
+
+        $contentType = wp_remote_retrieve_header($response, 'content-type');
+        $extension = str_contains((string) $contentType, 'png') ? 'png' : 'jpg';
 
         $tmp = wp_tempnam('seo-social-image');
         if (!$tmp) {
@@ -66,32 +112,15 @@ class SocialImageGenerator
             );
         }
 
-        $tmpPath = $tmp . '.jpg';
-        @rename($tmp, $tmpPath); // Make sure it ends with .jpg for media_handle_sideload.
+        $tmpPath = $tmp . '.' . $extension;
+        @rename($tmp, $tmpPath);
 
-        try {
-            Browsershot::url($url)
-                ->windowSize(self::WIDTH, self::HEIGHT)
-                ->setScreenshotType('jpeg', self::QUALITY)
-                ->waitUntilNetworkIdle()
-                ->save($tmpPath);
-        } catch (\Throwable $e) {
+        if (file_put_contents($tmpPath, $body) === false) {
             @unlink($tmpPath);
 
             return new WP_Error(
-                'seo_social_image_capture_failed',
-                __('Unable to capture the social image.', 'radicle'),
-                [
-                    'status' => 500,
-                    'detail' => $e->getMessage(),
-                ]
-            );
-        }
-
-        if (!file_exists($tmpPath)) {
-            return new WP_Error(
-                'seo_social_image_missing_file',
-                __('Screenshot was not created.', 'radicle'),
+                'seo_social_image_write_failed',
+                __('Could not write the social image file.', 'radicle'),
                 ['status' => 500]
             );
         }
@@ -103,8 +132,8 @@ class SocialImageGenerator
         }
 
         $fileArray = [
-            'name' => 'social-image-' . $postId . '.jpg',
-            'type' => 'image/jpeg',
+            'name' => $this->buildFilename($postId, $extension),
+            'type' => $contentType ?: 'image/jpeg',
             'tmp_name' => $tmpPath,
             'error' => 0,
             'size' => filesize($tmpPath) ?: null,
@@ -118,9 +147,10 @@ class SocialImageGenerator
             return $attachmentId;
         }
 
-        $url = wp_get_attachment_url($attachmentId);
+        $uploadedUrl = wp_get_attachment_url($attachmentId);
 
-        if (!$url) {
+        if (!$uploadedUrl) {
+            $this->log('Social image uploaded but URL missing.');
             @unlink($tmpPath);
 
             return new WP_Error(
@@ -130,27 +160,99 @@ class SocialImageGenerator
             );
         }
 
-        update_post_meta($postId, '_social_image_url', esc_url_raw($url));
+        update_post_meta($postId, '_social_image_url', esc_url_raw($uploadedUrl));
         update_post_meta($postId, '_social_image_id', absint($attachmentId));
 
         return [
             'attachment_id' => $attachmentId,
-            'url' => $url,
+            'url' => $uploadedUrl,
         ];
     }
 
-    private function hasPuppeteerModule(): bool
+    private function serviceUrl(): string
     {
-        // Project root: packages/40q/40q-seo-assistant/src/Support -> up 6 levels.
-        $root = dirname(__DIR__, 6);
-        $modulePath = $root . '/node_modules/puppeteer';
+        $configUrl = config('seo-assistant.social_image.service_url') ?? '';
+        $envUrl = getenv('SEO_ASSISTANT_SOCIAL_SERVICE_URL') ?: '';
 
-        // Allow users to point to a custom module path via env if needed.
-        $customPath = getenv('PUPPETEER_MODULE_PATH');
-        if ($customPath && is_dir($customPath)) {
-            return true;
+        $url = $envUrl ?: $configUrl ?: self::DEFAULT_SERVICE;
+
+        return rtrim((string) $url, '?');
+    }
+
+    private function targetUrl(int $postId, ?string $override = null): string
+    {
+        $configOverride = config('seo-assistant.social_image.target_override') ?? '';
+        $envOverride = getenv('SEO_ASSISTANT_SOCIAL_TARGET') ?: '';
+
+        $originOverride = trim((string) ($envOverride ?: $configOverride));
+        $base = $override ?: get_permalink($postId) ?: '';
+
+        if ($base === '') {
+            return '';
         }
 
-        return is_dir($modulePath);
+        if ($originOverride !== '') {
+            return $this->swapOrigin($originOverride, $base);
+        }
+
+        return $base;
+    }
+
+    private function timeout(): int
+    {
+        $configTimeout = (int) (config('seo-assistant.social_image.timeout') ?? 0);
+        $envTimeout = (int) getenv('SEO_ASSISTANT_SOCIAL_TIMEOUT');
+
+        $timeout = $envTimeout ?: $configTimeout;
+
+        // Clamp to a reasonable range to avoid hanging PHP workers.
+        if ($timeout < 5) {
+            $timeout = 30;
+        }
+
+        if ($timeout > 120) {
+            $timeout = 120;
+        }
+
+        return $timeout;
+    }
+
+    private function log(string $message): void
+    {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('[seo-assistant social image] ' . $message);
+        }
+    }
+
+    private function swapOrigin(string $origin, string $original): string
+    {
+        $originUrl = parse_url($origin);
+        $originalUrl = parse_url($original);
+
+        if (!$originUrl || !$originalUrl) {
+            return $original;
+        }
+
+        $scheme = $originUrl['scheme'] ?? 'https';
+        $host = $originUrl['host'] ?? '';
+        $port = isset($originUrl['port']) ? ':' . $originUrl['port'] : '';
+        $path = $originalUrl['path'] ?? '/';
+        $query = isset($originalUrl['query']) ? '?' . $originalUrl['query'] : '';
+        $fragment = isset($originalUrl['fragment']) ? '#' . $originalUrl['fragment'] : '';
+
+        if ($host === '') {
+            return $original;
+        }
+
+        return sprintf('%s://%s%s%s%s%s', $scheme, $host, $port, $path, $query, $fragment);
+    }
+
+    private function buildFilename(int $postId, string $extension): string
+    {
+        $slug = sanitize_title((string) get_post_field('post_name', $postId));
+        $slug = $slug !== '' ? $slug : 'post';
+        $random = random_int(1000, 99999);
+
+        return sprintf('social-image-%s-%s.%s', $slug, $random, $extension);
     }
 }
