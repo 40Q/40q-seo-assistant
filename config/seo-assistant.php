@@ -13,5 +13,6 @@ return [
     ],
     'social_image' => [
         'service_url' => env('SEO_ASSISTANT_SOCIAL_SERVICE_URL', 'https://og-gen-pjqz.onrender.com/screenshot'),
+        'timeout' => (int) env('SEO_ASSISTANT_SOCIAL_TIMEOUT', 15),
     ],
 ];

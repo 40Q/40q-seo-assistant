@@ -50,8 +50,9 @@ class SocialImageGenerator
         }
 
         $requestUrl = add_query_arg(['url' => $url], $service);
+        $timeout = $this->timeout();
         $response = wp_remote_get($requestUrl, [
-            'timeout' => 30,
+            'timeout' => $timeout,
             'redirection' => 3,
             'headers' => [
                 'Accept' => 'image/jpeg,image/png;q=0.9,*/*;q=0.8',
@@ -71,7 +72,14 @@ class SocialImageGenerator
             return new WP_Error(
                 'seo_social_image_capture_failed',
                 __('Unable to capture the social image.', 'radicle'),
-                ['status' => 500, 'detail' => sprintf('HTTP %d from screenshot service', $code)]
+                [
+                    'status' => 500,
+                    'detail' => sprintf(
+                        'HTTP %d from screenshot service%s',
+                        $code,
+                        $timeout ? sprintf(' (timeout %ss)', $timeout) : ''
+                    ),
+                ]
             );
         }
 
@@ -160,5 +168,15 @@ class SocialImageGenerator
         $url = $envUrl ?: $configUrl ?: self::DEFAULT_SERVICE;
 
         return rtrim((string) $url, '?');
+    }
+
+    private function timeout(): int
+    {
+        $configTimeout = (int) (config('seo-assistant.social_image.timeout') ?? 0);
+        $envTimeout = (int) getenv('SEO_ASSISTANT_SOCIAL_TIMEOUT');
+
+        $timeout = $envTimeout ?: $configTimeout;
+
+        return $timeout > 0 ? $timeout : 15;
     }
 }
